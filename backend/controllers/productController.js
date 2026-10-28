@@ -618,4 +618,27 @@ export const deleteCategory = async (req, res) => {
       message: "Server error",
     });
   }
-};
+};
+
+
+// ========================================
+// GET ALL CATEGORIES
+// GET /api/products/categories
+// ========================================
+
+export const getCategories = async (req, res) => {
+  try {
+    const categories = await Product.distinct("category", { isActive: true });
+    return res.status(200).json({
+      success: true,
+      count: categories.length,
+      categories: categories.sort(),
+    });
+  } catch (error) {
+    console.error("Get categories error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};

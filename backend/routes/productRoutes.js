@@ -7,6 +7,7 @@ import {
   updateProduct,
   deleteProduct,
   deleteCategory,
+  getCategories,
 } from "../controllers/productController.js";
 
 import {
@@ -16,13 +17,12 @@ import {
 
 const router = express.Router();
 
-// Public route
+// Public routes
+router.get("/categories", getCategories);
 router.get("/", getProducts);
-
 router.get("/:id", getProductById);
 
-
-// Admin-only route
+// Admin-only routes
 router.post(
   "/",
   protect,

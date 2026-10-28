@@ -125,19 +125,37 @@ Product deletion uses soft deletion by marking the product as inactive.
 
 ## 🌱 Database Seeding
 
-To seed the store with high-end luxury creations across categories (`Leather Goods`, `Shoes`, `Ready-to-Wear`, `Accessories`, `Watches`, `Electronics`):
+To seed the store with Admin & Customer users, Categories, and luxury Products across all collections:
 
-```bash
+`ash
 cd backend
 npm run seed
-```
+`
 
-To reset or remove all seeded products:
+### Modular Seeding Commands
 
-```bash
-cd backend
+`ash
+# Seed only Admin and Customer accounts
+npm run seed:users
+
+# Seed only Categories
+npm run seed:categories
+
+# Seed Categories and Products
+npm run seed:products
+
+# Reset / Destroy all seeded records
 npm run seed:destroy
-```
+`
+
+### Default Seed Credentials
+
+| Role | Name | Email | Password |
+|---|---|---|---|
+| **Admin** | ShopEase Admin | dmin@shopease.com | dmin123 |
+| **Customer** | Sophia Laurent | customer@shopease.com | customer123 |
+| **Customer** | Alexander Wright | lexander@shopease.com | customer123 |
+| **Customer** | Elena Rostova | elena@shopease.com | customer123 |
 
 ---
 

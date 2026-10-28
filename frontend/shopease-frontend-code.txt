@@ -1,0 +1,2752 @@
+==================================================
+FILE: .\src\App.jsx
+==================================================
+import {
+  Routes,
+  Route,
+} from "react-router-dom";
+
+import Home from "./pages/Home";
+import Products from "./pages/Products";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
+import Account from "./pages/Account";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminProducts from "./pages/AdminProducts";
+import AdminOrders from "./pages/AdminOrders";
+import AdminOrderDetails from "./pages/AdminOrderDetails";
+import ProductDetails from "./pages/ProductDetails";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import MyOrders from "./pages/MyOrders";
+import OrderDetails from "./pages/OrderDetails";
+
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
+
+function App() {
+  return (
+    <Routes>
+      {/* Public */}
+      <Route
+        path="/"
+        element={<Home />}
+      />
+
+      <Route
+        path="/products"
+        element={<Products />}
+      />
+
+      <Route
+        path="/products/:id"
+        element={<ProductDetails />}
+      />
+
+      <Route
+        path="/register"
+        element={<Register />}
+      />
+
+      <Route
+        path="/login"
+        element={<Login />}
+      />
+
+      {/* Customer */}
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <Account />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/cart"
+        element={
+          <ProtectedRoute>
+            <Cart />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/checkout"
+        element={
+          <ProtectedRoute>
+            <Checkout />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/orders"
+        element={
+          <ProtectedRoute>
+            <MyOrders />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/orders/:id"
+        element={
+          <ProtectedRoute>
+            <OrderDetails />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        }
+      />
+
+      <Route
+        path="/admin/products"
+        element={
+          <AdminRoute>
+            <AdminProducts />
+          </AdminRoute>
+        }
+      />
+
+      <Route
+        path="/admin/orders"
+        element={
+          <AdminRoute>
+            <AdminOrders />
+          </AdminRoute>
+        }
+      />
+
+      <Route
+        path="/admin/orders/:id"
+        element={
+          <AdminRoute>
+            <AdminOrderDetails />
+          </AdminRoute>
+        }
+      />
+    </Routes>
+  );
+}
+
+export default App;
+
+==================================================
+FILE: .\src\index.css
+==================================================
+@import "tailwindcss";
+
+==================================================
+FILE: .\src\context\AuthContext.jsx
+==================================================
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  registerUser,
+  loginUser,
+  getMe,
+  logoutUser,
+} from "../services/authApi";
+
+const AuthContext = createContext(null);
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+
+  const [token, setToken] = useState(
+    localStorage.getItem("shopease-token")
+  );
+
+  const [loading, setLoading] = useState(true);
+
+  // Restore logged-in user after page refresh
+  useEffect(() => {
+    const loadUser = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const data = await getMe(token);
+        setUser(data.user);
+      } catch (error) {
+        localStorage.removeItem("shopease-token");
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUser();
+  }, [token]);
+
+  const register = async (userData) => {
+    return await registerUser(userData);
+  };
+
+  const login = async (userData) => {
+    const data = await loginUser(userData);
+
+    localStorage.setItem("shopease-token", data.token);
+
+    setToken(data.token);
+    setUser(data.user);
+
+    return data;
+  };
+
+  const logout = async () => {
+    try {
+      if (token) {
+        await logoutUser(token);
+      }
+    } finally {
+      localStorage.removeItem("shopease-token");
+      setToken(null);
+      setUser(null);
+    }
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        register,
+        login,
+        logout,
+        isAuthenticated: !!user,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
+
+==================================================
+FILE: .\src\context\CartContext.jsx
+==================================================
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
+import { useAuth } from "./AuthContext";
+import {
+  getCart,
+  addToCart,
+  updateCartItem,
+  removeCartItem,
+} from "../services/cartApi";
+
+const CartContext = createContext(null);
+
+export const CartProvider = ({ children }) => {
+  const [cart, setCart] = useState(null);
+
+  const { token } = useAuth();
+
+  // Load the logged-in user's cart
+  useEffect(() => {
+    const loadCart = async () => {
+      // If user is not logged in, clear cart state
+      if (!token) {
+        setCart(null);
+        return;
+      }
+
+      try {
+        const data = await getCart(token);
+        setCart(data.cart);
+      } catch (error) {
+        console.error("Load cart error:", error);
+      }
+    };
+
+    loadCart();
+  }, [token]);
+
+  // Add a product to the cart
+  const addItem = async (productId, quantity = 1) => {
+    if (!token) {
+      throw new Error("Please login to add products to cart");
+    }
+
+    const data = await addToCart(
+      productId,
+      quantity,
+      token
+    );
+
+    setCart(data.cart);
+
+    return data;
+  };
+
+  // Update product quantity in the cart
+  const updateItem = async (productId, quantity) => {
+    if (!token) {
+      throw new Error("Please login to update cart");
+    }
+
+    const data = await updateCartItem(
+      productId,
+      quantity,
+      token
+    );
+
+    setCart(data.cart);
+
+    return data;
+  };
+
+  // Remove a product from the cart
+  const removeItem = async (productId) => {
+    if (!token) {
+      throw new Error(
+        "Please login to remove products from cart"
+      );
+    }
+
+    const data = await removeCartItem(
+      productId,
+      token
+    );
+
+    setCart(data.cart);
+
+    return data;
+  };
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        setCart,
+        token,
+        addItem,
+        updateItem,
+        removeItem,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+export const useCart = () => {
+  return useContext(CartContext);
+};
+
+==================================================
+FILE: .\src\components\ProtectedRoute.jsx
+==================================================
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+export default ProtectedRoute;
+
+==================================================
+FILE: .\src\components\AdminRoute.jsx
+==================================================
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+export default AdminRoute;
+
+==================================================
+FILE: .\src\pages\Home.jsx
+==================================================
+import { useAuth } from "../context/AuthContext";
+
+function Home() {
+  const { user, loading, logout } = useAuth();
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  return (
+    <div>
+      <h1 className="text-4xl font-bold">ShopEase</h1>
+      <p>Welcome to ShopEase Online Shopping Platform</p>
+
+      {user && (
+        <div className="mt-4">
+          <p>Logged in as: {user.name}</p>
+          <p>Role: {user.role}</p>
+
+          <button
+            onClick={logout}
+            className="mt-4 bg-black text-white px-4 py-2 rounded"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Home;
+
+==================================================
+FILE: .\src\pages\Products.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import { Link } from "react-router-dom";
+
+import {
+  getProducts,
+} from "../services/productApi";
+
+function Products() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [category, setCategory] =
+    useState("");
+  const [sort, setSort] = useState("");
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true);
+
+        const data = await getProducts({
+          search,
+          category,
+          sort,
+        });
+
+        setProducts(data.products || []);
+        setError("");
+      } catch (error) {
+        setError(
+          error.response?.data?.message ||
+            "Failed to load products"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, [search, category, sort]);
+
+  return (
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          Products
+        </h1>
+
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={search}
+          onChange={(e) =>
+            setSearch(e.target.value)
+          }
+          className="w-full border p-3 rounded mb-4"
+        />
+
+        <select
+          value={category}
+          onChange={(e) =>
+            setCategory(e.target.value)
+          }
+          className="w-full border p-3 rounded mb-4"
+        >
+          <option value="">
+            All Categories
+          </option>
+
+          <option value="Electronics">
+            Electronics
+          </option>
+        </select>
+
+        <select
+          value={sort}
+          onChange={(e) =>
+            setSort(e.target.value)
+          }
+          className="w-full border p-3 rounded mb-6"
+        >
+          <option value="">Newest</option>
+
+          <option value="price_asc">
+            Price: Low to High
+          </option>
+
+          <option value="price_desc">
+            Price: High to Low
+          </option>
+        </select>
+
+        {error && (
+          <p className="text-red-600 mb-4">
+            {error}
+          </p>
+        )}
+
+        {loading ? (
+          <p>Loading products...</p>
+        ) : products.length === 0 ? (
+          <p>No products found.</p>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <div
+                key={product._id}
+                className="border rounded-lg overflow-hidden"
+              >
+                {product.image ? (
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-56 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-56 bg-gray-100 flex items-center justify-center text-gray-500">
+                    No Image
+                  </div>
+                )}
+
+                <div className="p-4">
+                  <h2 className="text-xl font-semibold">
+                    {product.name}
+                  </h2>
+
+                  <p className="text-gray-600">
+                    {product.category}
+                  </p>
+
+                  <p className="font-bold mt-2">
+                    Rs. {product.price}
+                  </p>
+
+                  {product.stock > 0 ? (
+                    <p className="text-green-600">
+                      In Stock: {product.stock}
+                    </p>
+                  ) : (
+                    <p className="text-red-600 font-semibold">
+                      Out of Stock
+                    </p>
+                  )}
+
+                  <Link
+                    to={`/products/${product._id}`}
+                    className="inline-block mt-3 bg-black text-white px-4 py-2 rounded"
+                  >
+                    View Details
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default Products;
+
+==================================================
+FILE: .\src\pages\ProductDetails.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import { useParams } from "react-router-dom";
+
+import {
+  getProductById,
+} from "../services/productApi";
+
+import { useCart } from "../context/CartContext";
+
+function ProductDetails() {
+  const { id } = useParams();
+
+  const { addItem } = useCart();
+
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadProduct = async () => {
+      try {
+        const data = await getProductById(id);
+
+        setProduct(data.product);
+      } catch (error) {
+        setError(
+          error.response?.data?.message ||
+            "Failed to load product"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProduct();
+  }, [id]);
+
+  const handleAddToCart = async () => {
+    try {
+      await addItem(product._id, 1);
+
+      alert("Product added to cart");
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to add product to cart"
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading product...
+      </p>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="p-6">
+        {error}
+      </p>
+    );
+  }
+
+  if (!product) {
+    return (
+      <p className="p-6">
+        Product not found
+      </p>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-5xl mx-auto grid gap-8 md:grid-cols-2">
+        <div>
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full max-h-[500px] object-cover rounded-lg border"
+            />
+          ) : (
+            <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500">
+              No Image Available
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h1 className="text-3xl font-bold">
+            {product.name}
+          </h1>
+
+          <p className="mt-4 text-gray-700">
+            {product.description}
+          </p>
+
+          <p className="mt-4">
+            Category:{" "}
+            <span className="font-semibold">
+              {product.category}
+            </span>
+          </p>
+
+          <p className="text-2xl font-bold mt-3">
+            Rs. {product.price}
+          </p>
+
+          {product.stock > 0 ? (
+            <p className="text-green-600 mt-3">
+              In Stock: {product.stock}
+            </p>
+          ) : (
+            <p className="text-red-600 font-semibold mt-3">
+              Out of Stock
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={product.stock === 0}
+            className="mt-5 bg-black text-white px-6 py-3 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {product.stock === 0
+              ? "Out of Stock"
+              : "Add to Cart"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ProductDetails;
+
+==================================================
+FILE: .\src\pages\Login.jsx
+==================================================
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [message, setMessage] = useState("");
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const data = await login(formData);
+
+      setMessage(data.message);
+
+      // Redirect according to user role
+      if (data.user.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/");
+      }
+    } catch (error) {
+      setMessage(
+        error.response?.data?.message || "Login failed"
+      );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md space-y-4 border p-6 rounded-lg"
+      >
+        <h1 className="text-3xl font-bold">Login</h1>
+
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={formData.email}
+          onChange={handleChange}
+          className="w-full border p-3 rounded"
+        />
+
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          className="w-full border p-3 rounded"
+        />
+
+        <button
+          type="submit"
+          className="w-full bg-black text-white p-3 rounded"
+        >
+          Login
+        </button>
+
+        {message && (
+          <p className="text-center">{message}</p>
+        )}
+      </form>
+    </div>
+  );
+}
+
+export default Login;
+
+==================================================
+FILE: .\src\pages\Register.jsx
+==================================================
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
+
+function Register() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  const [message, setMessage] = useState("");
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const data = await register(formData);
+
+      setMessage(data.message);
+
+      setFormData({
+        name: "",
+        email: "",
+        password: "",
+      });
+      navigate("/login");
+    } catch (error) {
+      setMessage(
+        error.response?.data?.message || "Registration failed"
+      );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md space-y-4 border p-6 rounded-lg"
+      >
+        <h1 className="text-3xl font-bold">Create Account</h1>
+
+        <input
+          type="text"
+          name="name"
+          placeholder="Full Name"
+          value={formData.name}
+          onChange={handleChange}
+          className="w-full border p-3 rounded"
+        />
+
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={formData.email}
+          onChange={handleChange}
+          className="w-full border p-3 rounded"
+        />
+
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          className="w-full border p-3 rounded"
+        />
+
+        <button
+          type="submit"
+          className="w-full bg-black text-white p-3 rounded"
+        >
+          Register
+        </button>
+
+        {message && (
+          <p className="text-center">{message}</p>
+        )}
+      </form>
+    </div>
+  );
+}
+
+export default Register;
+
+==================================================
+FILE: .\src\pages\Account.jsx
+==================================================
+function Account() {
+  return (
+    <div>
+      <h1 className="text-4xl font-bold">My Account</h1>
+      <p>This page is only available to logged-in users.</p>
+    </div>
+  );
+}
+
+export default Account;
+
+==================================================
+FILE: .\src\pages\Cart.jsx
+==================================================
+import { useNavigate } from "react-router-dom";
+import { useCart } from "../context/CartContext";
+
+function Cart() {
+  const { cart, updateItem, removeItem } = useCart();
+  const navigate = useNavigate();
+
+  const handleIncrease = async (item) => {
+    try {
+      await updateItem(
+        item.product._id,
+        item.quantity + 1
+      );
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update quantity"
+      );
+    }
+  };
+
+  const handleDecrease = async (item) => {
+    if (item.quantity <= 1) {
+      return;
+    }
+
+    try {
+      await updateItem(
+        item.product._id,
+        item.quantity - 1
+      );
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update quantity"
+      );
+    }
+  };
+
+  const handleRemove = async (item) => {
+    try {
+      await removeItem(item.product._id);
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to remove product"
+      );
+    }
+  };
+
+  const handleCheckout = () => {
+    navigate("/checkout");
+  };
+
+  if (!cart) {
+    return <p className="p-6">Loading cart...</p>;
+  }
+
+  if (cart.items.length === 0) {
+    return (
+      <div className="p-6">
+        <h1 className="text-3xl font-bold mb-4">
+          My Cart
+        </h1>
+
+        <p>Your cart is empty.</p>
+      </div>
+    );
+  }
+
+  // Calculate total price of all cart items
+  const cartTotal = cart.items.reduce(
+    (total, item) =>
+      total + item.product.price * item.quantity,
+    0
+  );
+
+  return (
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-6">
+        My Cart
+      </h1>
+
+      <div className="space-y-4">
+        {cart.items.map((item) => (
+          <div
+            key={item.product._id}
+            className="border rounded-lg p-4"
+          >
+            <h2 className="text-xl font-semibold">
+              {item.product.name}
+            </h2>
+
+            <p className="mt-2">
+              Price: Rs. {item.product.price}
+            </p>
+
+            <p>
+              Quantity: {item.quantity}
+            </p>
+
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => handleDecrease(item)}
+                disabled={item.quantity <= 1}
+                className="bg-black text-white px-3 py-1 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                -
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleIncrease(item)}
+                disabled={
+                  item.quantity >= item.product.stock
+                }
+                className="bg-black text-white px-3 py-1 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                +
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRemove(item)}
+                className="bg-red-600 text-white px-4 py-1 rounded"
+              >
+                Remove
+              </button>
+            </div>
+
+            <p className="font-bold mt-2">
+              Subtotal: Rs.{" "}
+              {item.product.price * item.quantity}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 border-t pt-4">
+        <p className="text-2xl font-bold">
+          Total: Rs. {cartTotal}
+        </p>
+
+        <button
+          type="button"
+          onClick={handleCheckout}
+          className="mt-4 bg-black text-white px-6 py-2 rounded"
+        >
+          Proceed to Checkout
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default Cart;
+
+==================================================
+FILE: .\src\pages\Checkout.jsx
+==================================================
+import { useState } from "react";
+import { createOrder } from "../services/orderApi";
+import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/CartContext";
+
+function Checkout() {
+  const { token } = useAuth();
+  const { cart, setCart } = useCart();
+
+  const [formData, setFormData] = useState({
+    fullName: "",
+    phone: "",
+    address: "",
+    city: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData((previousData) => ({
+      ...previousData,
+      [name]: value,
+    }));
+  };
+
+  const handlePlaceOrder = async (e) => {
+    e.preventDefault();
+
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    if (
+      !formData.fullName.trim() ||
+      !formData.phone.trim() ||
+      !formData.address.trim() ||
+      !formData.city.trim()
+    ) {
+      setErrorMessage(
+        "Please fill in all delivery fields"
+      );
+      return;
+    }
+
+    if (!cart || cart.items.length === 0) {
+      setErrorMessage("Your cart is empty");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await createOrder(
+        formData,
+        token
+      );
+
+      // Backend clears the database cart.
+      // Clear frontend cart state as well.
+      setCart((previousCart) => {
+        if (!previousCart) {
+          return previousCart;
+        }
+
+        return {
+          ...previousCart,
+          items: [],
+        };
+      });
+
+      setSuccessMessage(
+        data.message || "Order placed successfully"
+      );
+
+      setFormData({
+        fullName: "",
+        phone: "",
+        address: "",
+        city: "",
+      });
+
+      console.log("Created order:", data.order);
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to place order";
+
+      setErrorMessage(message);
+
+      console.error(
+        "Place order error:",
+        error.response?.data || error.message
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate cart total using current product prices.
+  // Backend will calculate the real trusted total again.
+  const cartTotal =
+    cart?.items?.reduce(
+      (total, item) =>
+        total +
+        item.product.price * item.quantity,
+      0
+    ) || 0;
+
+  if (!cart) {
+    return (
+      <p className="p-6">
+        Loading checkout...
+      </p>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          Checkout
+        </h1>
+
+        {successMessage && (
+          <div className="mb-4 border border-green-500 bg-green-50 p-3 rounded">
+            <p className="text-green-700">
+              {successMessage}
+            </p>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-4 border border-red-500 bg-red-50 p-3 rounded">
+            <p className="text-red-700">
+              {errorMessage}
+            </p>
+          </div>
+        )}
+
+        {/* Order Summary */}
+        <div className="border rounded-lg p-4 mb-6">
+          <h2 className="text-xl font-bold mb-4">
+            Order Summary
+          </h2>
+
+          {cart.items.length === 0 ? (
+            <p className="text-gray-600">
+              Your cart is empty.
+            </p>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {cart.items.map((item) => (
+                  <div
+                    key={item.product._id}
+                    className="border-b pb-3"
+                  >
+                    <p className="font-semibold">
+                      {item.product.name}
+                    </p>
+
+                    <p>
+                      Price: Rs.{" "}
+                      {item.product.price}
+                    </p>
+
+                    <p>
+                      Quantity: {item.quantity}
+                    </p>
+
+                    <p className="font-semibold">
+                      Subtotal: Rs.{" "}
+                      {item.product.price *
+                        item.quantity}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xl font-bold">
+                  Total: Rs. {cartTotal}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Delivery Information */}
+        <form onSubmit={handlePlaceOrder}>
+          <h2 className="text-xl font-bold mb-4">
+            Delivery Information
+          </h2>
+
+          <div>
+            <label className="block mb-2 font-semibold">
+              Full Name
+            </label>
+
+            <input
+              type="text"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+              placeholder="Enter your full name"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block mb-2 font-semibold">
+              Phone
+            </label>
+
+            <input
+              type="text"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+              placeholder="Enter your phone number"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block mb-2 font-semibold">
+              Address
+            </label>
+
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+              placeholder="Enter your delivery address"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block mb-2 font-semibold">
+              City
+            </label>
+
+            <input
+              type="text"
+              name="city"
+              value={formData.city}
+              onChange={handleChange}
+              className="w-full border rounded px-3 py-2"
+              placeholder="Enter your city"
+              disabled={loading}
+            />
+          </div>
+
+          {/* Payment Method */}
+          <div className="mt-5 border rounded p-3">
+            <p className="font-semibold">
+              Payment Method
+            </p>
+
+            <p className="text-gray-600">
+              Cash on Delivery (COD)
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={
+              loading || cart.items.length === 0
+            }
+            className="w-full mt-6 bg-black text-white py-2 px-4 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {loading
+              ? "Placing Order..."
+              : "Place Order"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default Checkout;
+
+==================================================
+FILE: .\src\pages\MyOrders.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../context/AuthContext";
+
+import {
+  getMyOrders,
+} from "../services/orderApi";
+
+function MyOrders() {
+  const { token } = useAuth();
+  const navigate = useNavigate();
+
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const data = await getMyOrders(token);
+
+        setOrders(data.orders || []);
+      } catch (error) {
+        setErrorMessage(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load orders"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      loadOrders();
+    }
+  }, [token]);
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading orders...
+      </p>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          My Orders
+        </h1>
+
+        {errorMessage && (
+          <div className="border border-red-500 bg-red-50 text-red-700 p-3 rounded mb-4">
+            {errorMessage}
+          </div>
+        )}
+
+        {!errorMessage &&
+          orders.length === 0 && (
+            <div className="border rounded-lg p-6">
+              <p className="text-gray-600">
+                You have not placed any orders yet.
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  navigate("/products")
+                }
+                className="mt-4 bg-black text-white px-5 py-2 rounded"
+              >
+                Browse Products
+              </button>
+            </div>
+          )}
+
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <div
+              key={order._id}
+              className="border rounded-lg p-5"
+            >
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div>
+                  <p className="font-semibold">
+                    Order ID
+                  </p>
+
+                  <p className="text-sm text-gray-600 break-all">
+                    {order._id}
+                  </p>
+
+                  <p className="mt-2">
+                    Status:{" "}
+                    <span className="font-semibold">
+                      {order.status}
+                    </span>
+                  </p>
+
+                  <p>
+                    Items: {order.items.length}
+                  </p>
+
+                  <p className="font-bold mt-2">
+                    Total: Rs.{" "}
+                    {order.totalAmount}
+                  </p>
+
+                  <p className="text-sm text-gray-500 mt-2">
+                    {new Date(
+                      order.createdAt
+                    ).toLocaleString()}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      `/orders/${order._id}`
+                    )
+                  }
+                  className="bg-black text-white px-5 py-2 rounded"
+                >
+                  View Details
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default MyOrders;
+
+==================================================
+FILE: .\src\pages\OrderDetails.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import { useAuth } from "../context/AuthContext";
+
+import {
+  getMyOrderById,
+} from "../services/orderApi";
+
+function OrderDetails() {
+  const { id } = useParams();
+
+  const { token } = useAuth();
+
+  const navigate = useNavigate();
+
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  useEffect(() => {
+    const loadOrder = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const data = await getMyOrderById(
+          id,
+          token
+        );
+
+        setOrder(data.order);
+      } catch (error) {
+        setErrorMessage(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load order"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token && id) {
+      loadOrder();
+    }
+  }, [id, token]);
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading order details...
+      </p>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="p-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="border border-red-500 bg-red-50 text-red-700 p-4 rounded">
+            {errorMessage}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/orders")
+            }
+            className="mt-4 bg-black text-white px-5 py-2 rounded"
+          >
+            Back to My Orders
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return null;
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-3xl mx-auto">
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/orders")
+          }
+          className="mb-5 border px-4 py-2 rounded"
+        >
+          ← Back to My Orders
+        </button>
+
+        <h1 className="text-3xl font-bold mb-2">
+          Order Details
+        </h1>
+
+        <p className="text-sm text-gray-600 break-all">
+          Order ID: {order._id}
+        </p>
+
+        {/* Order Information */}
+        <div className="border rounded-lg p-4 mt-6">
+          <h2 className="text-xl font-bold mb-3">
+            Order Information
+          </h2>
+
+          <p>
+            Status:{" "}
+            <span className="font-semibold">
+              {order.status}
+            </span>
+          </p>
+
+          <p>
+            Payment Method:{" "}
+            {order.paymentMethod}
+          </p>
+
+          <p>
+            Order Date:{" "}
+            {new Date(
+              order.createdAt
+            ).toLocaleString()}
+          </p>
+        </div>
+
+        {/* Products */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-4">
+            Products
+          </h2>
+
+          <div className="space-y-4">
+            {order.items.map((item) => (
+              <div
+                key={item.product}
+                className="border-b pb-3"
+              >
+                <p className="font-semibold">
+                  {item.productName}
+                </p>
+
+                <p>
+                  Price: Rs. {item.price}
+                </p>
+
+                <p>
+                  Quantity: {item.quantity}
+                </p>
+
+                <p className="font-semibold">
+                  Subtotal: Rs.{" "}
+                  {item.price *
+                    item.quantity}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xl font-bold mt-4">
+            Total: Rs. {order.totalAmount}
+          </p>
+        </div>
+
+        {/* Delivery */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-3">
+            Delivery Information
+          </h2>
+
+          <p>
+            Name:{" "}
+            {order.deliveryInfo.fullName}
+          </p>
+
+          <p>
+            Phone:{" "}
+            {order.deliveryInfo.phone}
+          </p>
+
+          <p>
+            Address:{" "}
+            {order.deliveryInfo.address}
+          </p>
+
+          <p>
+            City:{" "}
+            {order.deliveryInfo.city}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default OrderDetails;
+
+==================================================
+FILE: .\src\pages\AdminDashboard.jsx
+==================================================
+function AdminDashboard() {
+  return (
+    <div>
+      <h1 className="text-4xl font-bold">Admin Dashboard</h1>
+      <p>Only administrators can access this page.</p>
+    </div>
+  );
+}
+
+export default AdminDashboard;
+
+==================================================
+FILE: .\src\pages\AdminProducts.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from "../services/productApi";
+
+import {
+  uploadProductImage,
+} from "../services/uploadApi";
+
+import { useAuth } from "../context/AuthContext";
+
+function AdminProducts() {
+  const { token } = useAuth();
+
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] =
+    useState(false);
+
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  const [editingProductId, setEditingProductId] =
+    useState(null);
+
+  const [selectedImage, setSelectedImage] =
+    useState(null);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    price: "",
+    category: "",
+    stock: "",
+    image: "",
+  });
+
+  const resetForm = () => {
+    setEditingProductId(null);
+    setSelectedImage(null);
+
+    setFormData({
+      name: "",
+      description: "",
+      price: "",
+      category: "",
+      stock: "",
+      image: "",
+    });
+  };
+
+  const handleChange = (e) => {
+    setFormData((previousData) => ({
+      ...previousData,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      setSelectedImage(null);
+      return;
+    }
+
+    setSelectedImage(file);
+    setError("");
+  };
+
+  const handleEdit = (product) => {
+    setEditingProductId(product._id);
+    setSelectedImage(null);
+
+    setFormData({
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      category: product.category,
+      stock: product.stock,
+      image: product.image || "",
+    });
+
+    setError("");
+    setSuccessMessage("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  const handleCancelEdit = () => {
+    resetForm();
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccessMessage("");
+
+      let imageUrl = formData.image;
+
+      // Upload selected image first
+      if (selectedImage) {
+        setUploadingImage(true);
+
+        const uploadData =
+          await uploadProductImage(
+            selectedImage,
+            token
+          );
+
+        imageUrl = uploadData.imageUrl;
+
+        setUploadingImage(false);
+      }
+
+      const productData = {
+        ...formData,
+        image: imageUrl,
+      };
+
+      if (editingProductId) {
+        const data = await updateProduct(
+          editingProductId,
+          productData,
+          token
+        );
+
+        setProducts((currentProducts) =>
+          currentProducts.map((product) =>
+            product._id === editingProductId
+              ? data.product
+              : product
+          )
+        );
+
+        setSuccessMessage(
+          "Product updated successfully"
+        );
+      } else {
+        const data = await createProduct(
+          productData,
+          token
+        );
+
+        setProducts((currentProducts) => [
+          data.product,
+          ...currentProducts,
+        ]);
+
+        setSuccessMessage(
+          "Product created successfully"
+        );
+      }
+
+      resetForm();
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to save product"
+      );
+    } finally {
+      setSaving(false);
+      setUploadingImage(false);
+    }
+  };
+
+  const handleDelete = async (productId) => {
+    try {
+      setError("");
+      setSuccessMessage("");
+
+      await deleteProduct(productId, token);
+
+      setProducts((currentProducts) =>
+        currentProducts.filter(
+          (product) =>
+            product._id !== productId
+        )
+      );
+
+      setSuccessMessage(
+        "Product removed successfully"
+      );
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+          "Failed to delete product"
+      );
+    }
+  };
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const data = await getProducts();
+
+        setProducts(data.products || []);
+      } catch (error) {
+        setError(
+          error.response?.data?.message ||
+            "Failed to load products"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading products...
+      </p>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          Manage Products
+        </h1>
+
+        {error && (
+          <div className="mb-4 border border-red-500 bg-red-50 text-red-700 p-3 rounded">
+            {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-4 border border-green-500 bg-green-50 text-green-700 p-3 rounded">
+            {successMessage}
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="mb-8 border rounded-lg p-4 space-y-4"
+        >
+          <h2 className="text-2xl font-semibold">
+            {editingProductId
+              ? "Edit Product"
+              : "Add Product"}
+          </h2>
+
+          <input
+            type="text"
+            name="name"
+            placeholder="Product Name"
+            value={formData.name}
+            onChange={handleChange}
+            className="w-full border p-3 rounded"
+            disabled={saving}
+          />
+
+          <textarea
+            name="description"
+            placeholder="Product Description"
+            value={formData.description}
+            onChange={handleChange}
+            className="w-full border p-3 rounded"
+            disabled={saving}
+          />
+
+          <input
+            type="number"
+            name="price"
+            placeholder="Price"
+            value={formData.price}
+            onChange={handleChange}
+            className="w-full border p-3 rounded"
+            min="0"
+            disabled={saving}
+          />
+
+          <input
+            type="text"
+            name="category"
+            placeholder="Category"
+            value={formData.category}
+            onChange={handleChange}
+            className="w-full border p-3 rounded"
+            disabled={saving}
+          />
+
+          <input
+            type="number"
+            name="stock"
+            placeholder="Stock"
+            value={formData.stock}
+            onChange={handleChange}
+            className="w-full border p-3 rounded"
+            min="0"
+            disabled={saving}
+          />
+
+          {/* Image */}
+          <div>
+            <label className="block font-semibold mb-2">
+              Product Image
+            </label>
+
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageChange}
+              className="w-full border p-3 rounded"
+              disabled={saving}
+            />
+
+            <p className="text-sm text-gray-500 mt-2">
+              JPG, PNG or WEBP. Maximum 5 MB.
+            </p>
+          </div>
+
+          {/* Existing image preview */}
+          {formData.image && !selectedImage && (
+            <div>
+              <p className="font-semibold mb-2">
+                Current Image
+              </p>
+
+              <img
+                src={formData.image}
+                alt="Current product"
+                className="w-40 h-40 object-cover border rounded"
+              />
+            </div>
+          )}
+
+          {/* Local selected image preview */}
+          {selectedImage && (
+            <div>
+              <p className="font-semibold mb-2">
+                New Image
+              </p>
+
+              <img
+                src={URL.createObjectURL(
+                  selectedImage
+                )}
+                alt="Selected product"
+                className="w-40 h-40 object-cover border rounded"
+              />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-black text-white px-5 py-3 rounded disabled:bg-gray-400"
+          >
+            {uploadingImage
+              ? "Uploading Image..."
+              : saving
+                ? "Saving..."
+                : editingProductId
+                  ? "Update Product"
+                  : "Add Product"}
+          </button>
+
+          {editingProductId && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              disabled={saving}
+              className="ml-2 border px-5 py-3 rounded"
+            >
+              Cancel
+            </button>
+          )}
+        </form>
+
+        {products.length === 0 ? (
+          <p>No active products available.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <div
+                key={product._id}
+                className="border rounded-lg p-4"
+              >
+                {product.image ? (
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-48 object-cover rounded mb-4"
+                  />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 rounded mb-4 flex items-center justify-center text-gray-500">
+                    No Image
+                  </div>
+                )}
+
+                <h2 className="text-xl font-semibold">
+                  {product.name}
+                </h2>
+
+                <p>
+                  Category: {product.category}
+                </p>
+
+                <p>
+                  Price: Rs. {product.price}
+                </p>
+
+                <p>
+                  Stock: {product.stock}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleEdit(product)
+                  }
+                  className="mt-3 mr-2 bg-blue-600 text-white px-4 py-2 rounded"
+                >
+                  Edit
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleDelete(product._id)
+                  }
+                  className="mt-3 bg-red-600 text-white px-4 py-2 rounded"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default AdminProducts;
+
+==================================================
+FILE: .\src\pages\AdminOrders.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../context/AuthContext";
+
+import {
+  getAllOrders,
+} from "../services/adminOrderApi";
+
+function AdminOrders() {
+  const { token } = useAuth();
+  const navigate = useNavigate();
+
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  useEffect(() => {
+    const loadOrders = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const data = await getAllOrders(token);
+
+        setOrders(data.orders || []);
+      } catch (error) {
+        setErrorMessage(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load orders"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      loadOrders();
+    }
+  }, [token]);
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading admin orders...
+      </p>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">
+          Admin Orders
+        </h1>
+
+        {errorMessage && (
+          <div className="border border-red-500 bg-red-50 text-red-700 p-3 rounded mb-5">
+            {errorMessage}
+          </div>
+        )}
+
+        {!errorMessage &&
+          orders.length === 0 && (
+            <p>No orders found.</p>
+          )}
+
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <div
+              key={order._id}
+              className="border rounded-lg p-5"
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="font-semibold">
+                    Order ID
+                  </p>
+
+                  <p className="text-sm text-gray-600 break-all">
+                    {order._id}
+                  </p>
+
+                  <p className="mt-2">
+                    Customer:{" "}
+                    <span className="font-semibold">
+                      {order.user?.name ||
+                        "Unknown Customer"}
+                    </span>
+                  </p>
+
+                  <p>
+                    Email:{" "}
+                    {order.user?.email || "N/A"}
+                  </p>
+
+                  <p>
+                    Status:{" "}
+                    <span className="font-semibold">
+                      {order.status}
+                    </span>
+                  </p>
+
+                  <p>
+                    Items: {order.items.length}
+                  </p>
+
+                  <p className="font-bold mt-2">
+                    Total: Rs.{" "}
+                    {order.totalAmount}
+                  </p>
+
+                  <p className="text-sm text-gray-500 mt-2">
+                    {new Date(
+                      order.createdAt
+                    ).toLocaleString()}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      `/admin/orders/${order._id}`
+                    )
+                  }
+                  className="bg-black text-white px-5 py-2 rounded"
+                >
+                  Manage Order
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default AdminOrders;
+
+==================================================
+FILE: .\src\pages\AdminOrderDetails.jsx
+==================================================
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import { useAuth } from "../context/AuthContext";
+
+import {
+  getAdminOrderById,
+  updateOrderStatus,
+} from "../services/adminOrderApi";
+
+const statusTransitions = {
+  Pending: ["Confirmed", "Cancelled"],
+  Confirmed: ["Processing", "Cancelled"],
+  Processing: ["Shipped", "Cancelled"],
+  Shipped: ["Delivered"],
+  Delivered: [],
+  Cancelled: [],
+};
+
+function AdminOrderDetails() {
+  const { id } = useParams();
+  const { token } = useAuth();
+  const navigate = useNavigate();
+
+  const [order, setOrder] = useState(null);
+  const [selectedStatus, setSelectedStatus] =
+    useState("");
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  useEffect(() => {
+    const loadOrder = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const data = await getAdminOrderById(
+          id,
+          token
+        );
+
+        setOrder(data.order);
+        setSelectedStatus("");
+      } catch (error) {
+        setErrorMessage(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to load order"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token && id) {
+      loadOrder();
+    }
+  }, [id, token]);
+
+  const handleStatusUpdate = async () => {
+    if (!selectedStatus) {
+      setErrorMessage(
+        "Please select a new order status"
+      );
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const data = await updateOrderStatus(
+        id,
+        selectedStatus,
+        token
+      );
+
+      setOrder(data.order);
+      setSelectedStatus("");
+
+      setSuccessMessage(data.message);
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to update order status"
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <p className="p-6">
+        Loading order...
+      </p>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="p-6">
+        <p>{errorMessage || "Order not found"}</p>
+
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/admin/orders")
+          }
+          className="mt-4 bg-black text-white px-5 py-2 rounded"
+        >
+          Back to Orders
+        </button>
+      </div>
+    );
+  }
+
+  const availableStatuses =
+    statusTransitions[order.status] || [];
+
+  return (
+    <div className="p-6">
+      <div className="max-w-4xl mx-auto">
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/admin/orders")
+          }
+          className="border px-4 py-2 rounded mb-5"
+        >
+          ← Back to Admin Orders
+        </button>
+
+        <h1 className="text-3xl font-bold">
+          Manage Order
+        </h1>
+
+        <p className="text-sm text-gray-600 break-all mt-2">
+          Order ID: {order._id}
+        </p>
+
+        {successMessage && (
+          <div className="border border-green-500 bg-green-50 text-green-700 p-3 rounded mt-5">
+            {successMessage}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="border border-red-500 bg-red-50 text-red-700 p-3 rounded mt-5">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* Customer */}
+        <div className="border rounded-lg p-4 mt-6">
+          <h2 className="text-xl font-bold mb-3">
+            Customer
+          </h2>
+
+          <p>
+            Name: {order.user?.name || "N/A"}
+          </p>
+
+          <p>
+            Email: {order.user?.email || "N/A"}
+          </p>
+        </div>
+
+        {/* Order Information */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-3">
+            Order Information
+          </h2>
+
+          <p>
+            Status:{" "}
+            <span className="font-bold">
+              {order.status}
+            </span>
+          </p>
+
+          <p>
+            Payment: {order.paymentMethod}
+          </p>
+
+          <p>
+            Date:{" "}
+            {new Date(
+              order.createdAt
+            ).toLocaleString()}
+          </p>
+        </div>
+
+        {/* Status Management */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-3">
+            Update Status
+          </h2>
+
+          {availableStatuses.length > 0 ? (
+            <>
+              <select
+                value={selectedStatus}
+                onChange={(e) =>
+                  setSelectedStatus(
+                    e.target.value
+                  )
+                }
+                disabled={updating}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">
+                  Select new status
+                </option>
+
+                {availableStatuses.map(
+                  (status) => (
+                    <option
+                      key={status}
+                      value={status}
+                    >
+                      {status}
+                    </option>
+                  )
+                )}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleStatusUpdate}
+                disabled={
+                  updating || !selectedStatus
+                }
+                className="mt-3 bg-black text-white px-5 py-2 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {updating
+                  ? "Updating..."
+                  : "Update Status"}
+              </button>
+            </>
+          ) : (
+            <p className="text-gray-600">
+              This order has reached its final
+              status and cannot be changed.
+            </p>
+          )}
+        </div>
+
+        {/* Products */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-4">
+            Products
+          </h2>
+
+          <div className="space-y-4">
+            {order.items.map((item) => (
+              <div
+                key={item.product}
+                className="border-b pb-3"
+              >
+                <p className="font-semibold">
+                  {item.productName}
+                </p>
+
+                <p>
+                  Price: Rs. {item.price}
+                </p>
+
+                <p>
+                  Quantity: {item.quantity}
+                </p>
+
+                <p className="font-semibold">
+                  Subtotal: Rs.{" "}
+                  {item.price *
+                    item.quantity}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xl font-bold mt-4">
+            Total: Rs. {order.totalAmount}
+          </p>
+        </div>
+
+        {/* Delivery */}
+        <div className="border rounded-lg p-4 mt-4">
+          <h2 className="text-xl font-bold mb-3">
+            Delivery Information
+          </h2>
+
+          <p>
+            Name:{" "}
+            {order.deliveryInfo.fullName}
+          </p>
+
+          <p>
+            Phone:{" "}
+            {order.deliveryInfo.phone}
+          </p>
+
+          <p>
+            Address:{" "}
+            {order.deliveryInfo.address}
+          </p>
+
+          <p>
+            City: {order.deliveryInfo.city}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default AdminOrderDetails;
+

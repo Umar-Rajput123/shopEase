@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  --color-gucci-black: #0a0a0a;
+  --color-gucci-dark: #141414;
+  --color-gucci-alabaster: #fbfbf9;
+  --color-gucci-sand: #f5f4ef;
+  --color-gucci-border: #e8e8e6;
+  --color-gucci-border-subtle: #f0f0ed;
+  --color-gucci-red: #6b1724;
+  --color-gucci-gold: #c5a880;
+  --color-gucci-muted: #737373;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #fbfbf9;
+  color: #0a0a0a;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Luxury letter spacing classes */
+.tracking-luxury {
+  letter-spacing: 0.22em;
+}
+
+.tracking-luxury-wide {
+  letter-spacing: 0.3em;
+}
+
+.tracking-subtle {
+  letter-spacing: 0.08em;
+}
+
+/* Editorial Serif Headings */
+.font-editorial {
+  font-family: var(--font-serif);
+}
+
+/* Subtle Animated Underline for Links */
+.link-editorial {
+  position: relative;
+  display: inline-block;
+}
+
+.link-editorial::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: currentColor;
+  transition: width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.link-editorial:hover::after {
+  width: 100%;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: #0a0a0a;
+  color: #ffffff;
+}

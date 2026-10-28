@@ -26,51 +26,92 @@ const app = express();
 // ========================================
 
 // Security-related HTTP headers
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
 // Remove Express information header
 app.disable("x-powered-by");
 
-// CORS
-const allowedOrigins = [
-  process.env.FRONTEND_URL ||
-    "http://localhost:5173",
+// CORS Configuration
+const cleanOrigin = (url) => (url ? url.trim().replace(/\/+$/, "") : "");
+
+const configuredOrigins = (process.env.FRONTEND_URL || "")
+  .split(",")
+  .map(cleanOrigin)
+  .filter(Boolean);
+
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+  "https://shop-ease-c8jv.vercel.app",
 ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow tools such as Postman
-      // that do not send an Origin header.
-      if (!origin) {
-        return callback(null, true);
-      }
+const allowedOriginsSet = new Set([...defaultOrigins, ...configuredOrigins]);
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Allow non-browser requests like Postman/curl
 
-      return callback(
-        new Error(
-          "Not allowed by CORS"
-        )
-      );
-    },
+  const normalized = cleanOrigin(origin);
 
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "DELETE",
-      "PATCH",
-    ],
+  if (allowedOriginsSet.has(normalized)) {
+    return true;
+  }
 
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-    ],
-  })
-);
+  // Allow all Vercel deployments (production, previews, branch deploys)
+  if (/^https:\/\/.*\.vercel\.app$/i.test(normalized)) {
+    return true;
+  }
+
+  if (configuredOrigins.includes("*")) {
+    return true;
+  }
+
+  return false;
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked request from origin: ${origin}`);
+    return callback(
+      new Error(
+        "Not allowed by CORS"
+      )
+    );
+  },
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+    "HEAD",
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 
 // Limit JSON/body size
 app.use(
@@ -204,3 +245,5 @@ app.listen(PORT, () => {
     `Server running on port ${PORT}`
   );
 });
+
+export default app;

@@ -7,6 +7,7 @@ export const apiLimiter = rateLimit({
 
   standardHeaders: "draft-8",
   legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
 
   message: {
     success: false,
@@ -22,6 +23,7 @@ export const authLimiter = rateLimit({
 
   standardHeaders: "draft-8",
   legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
 
   message: {
     success: false,
